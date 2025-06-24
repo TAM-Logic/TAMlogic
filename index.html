@@ -135,13 +135,48 @@
       return `https://source.unsplash.com/800x450/?${encodeURIComponent(title)}`;
     }
 
-    // Simple helper to check if image field contains valid URL
-    function isValidImageUrl(imageValue) {
-      if (!imageValue || typeof imageValue !== 'string') return false;
-      const trimmed = imageValue.trim();
-      // Must start with http and not contain HTML tags
-      return (trimmed.startsWith('http://') || trimmed.startsWith('https://')) && 
-             !trimmed.includes('<') && !trimmed.includes('>');
+    /**
+     * Data Transformation: Clean and validate image URL from CSV
+     * @param {string} rawImageValue - Raw image field from CSV
+     * @returns {string|null} Valid URL or null if invalid/empty
+     */
+    function normalizeImageUrl(rawImageValue) {
+      // Step 1: Handle undefined, null, or non-string values
+      if (!rawImageValue || typeof rawImageValue !== 'string') {
+        return null;
+      }
+      
+      // Step 2: Clean whitespace and check for content
+      const trimmed = rawImageValue.trim();
+      if (!trimmed) {
+        return null;
+      }
+      
+      // Step 3: Validate URL format and reject HTML content
+      const isValidUrl = (trimmed.startsWith('http://') || trimmed.startsWith('https://'));
+      const containsHtml = trimmed.includes('<') || trimmed.includes('>');
+      
+      return (isValidUrl && !containsHtml) ? trimmed : null;
+    }
+
+    /**
+     * Pure Function: Resolve final image URL for blog post
+     * @param {string|null} csvImageUrl - Validated image URL from CSV
+     * @param {string} postTitle - Blog post title for fallback image
+     * @returns {string} Final image URL to use
+     */
+    function resolveBlogPostImageUrl(csvImageUrl, postTitle) {
+      return csvImageUrl || unsplashImageUrl(postTitle);
+    }
+
+    /**
+     * Pure Function: Resolve final hero image URL
+     * @param {string|null} csvHeroUrl - Hero image URL from config
+     * @param {string} theme - Theme for fallback image
+     * @returns {string} Final hero image URL to use
+     */
+    function resolveHeroImageUrl(csvHeroUrl, theme) {
+      return csvHeroUrl || fetchUnsplashFeaturedImage(theme);
     }
 
     // UI update functions - exactly as original
@@ -186,7 +221,9 @@
       header.innerText = config.Header;
       subheader.innerText = config.Subheader;
       
-      let heroImageUrl = config['hero-image'] ? config['hero-image'] : fetchUnsplashFeaturedImage(config.Theme);
+      // Hero image resolution with clear data flow
+      const normalizedHeroUrl = normalizeImageUrl(config['hero-image']);
+      const heroImageUrl = resolveHeroImageUrl(normalizedHeroUrl, config.Theme);
       heroImage.style.backgroundImage = `url(${heroImageUrl})`;
       heroImage.style.backgroundAttachment = 'fixed';
       heroImage.style.backgroundSize = 'cover';
@@ -245,8 +282,9 @@
         blogPost.setAttribute('data-aos', 'fade-up');
         blogPost.setAttribute('data-aos-delay', index * 100);
 
-        // THE KEY FIX: Check if image field has valid URL, otherwise use unsplash
-        const imageUrl = isValidImageUrl(row.image) ? row.image : unsplashImageUrl(row.title);
+        // Blog post image resolution with clear data transformation
+        const normalizedImageUrl = normalizeImageUrl(row.image);
+        const imageUrl = resolveBlogPostImageUrl(normalizedImageUrl, row.title);
 
         blogPost.innerHTML = `
           <div class="bg-white rounded-lg overflow-hidden p-6 mb-8 shadow">
