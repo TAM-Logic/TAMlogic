@@ -85,4 +85,260 @@
     }
   </style>
 </head>
+
+<body class="bg-gray-100">
+  <div class="magic-slideDown bg-cover bg-center" id="hero">
+    <div id="header-container">
+      <h1 class="text-white text-4xl md:text-6xl font-bold mt-10 ml-10 magic magic-wind show-bg" data-aos="fade-down" id="header"></h1>
+      <h2 class="text-white text-2xl md:text-4xl mt-4 ml-10 magic magic-time show-bg" data-aos="fade-up" id="subheader"></h2>
+    </div>
+    <button class="bg-blue-500 text-white px-4 py-2 rounded magic-hover magic-hover__square" id="scroll_to_blog_button" onclick="scrollToBlog()">Scroll to Content</button>
+  </div>
+  <div class="container mx-auto p-8" id="blog"></div>
+  <div class="footer bg-gray-800 p-4 mt-16 text-white fixed bottom-0 w-full opacity-100" id="sticky_footer">
+    <div class="container mx-auto flex justify-evenly" id="social_links"></div>
+    <div class="container mx-auto" id="owner_line"></div>
+  </div>
+ 
+<script>
+// Configuration Constants
+const CONFIG = {
+  SHEET_URLS: {
+    CONFIG: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRXpTRtEhBvvYGr49Iyr7zI2XMvsWUdaK_T3wtRMyPmCIFN8pkFxXOSP586gfWrMcbYpcaJ5DaGCLRY/pub?gid=81047960&single=true&output=csv',
+    CONTENT: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRXpTRtEhBvvYGr49Iyr7zI2XMvsWUdaK_T3wtRMyPmCIFN8pkFxXOSP586gfWrMcbYpcaJ5DaGCLRY/pub?gid=0&single=true&output=csv'
+  },
+  UNSPLASH: {
+    FEATURED_SIZE: '1600x900',
+    POST_SIZE: '800x450'
+  },
+  ANIMATION: {
+    DELAY_INCREMENT: 100,
+    PARALLAX_SPEED: -0.5
+  },
+  SCROLL_THRESHOLD: 10
+};
+
+const SOCIAL_PLATFORM_URLS = {
+  twitterx: (handle) => `https://twitter.com/${handle}`,
+  facebook: (handle) => `https://facebook.com/${handle}`,
+  reddit: (handle) => `https://reddit.com/user/${handle}`,
+  email: (address) => `mailto:${address}`,
+  github: (handle) => `https://github.com/${handle}`,
+  linkedin: (handle) => `https://linkedin.com/in/${handle}`,
+  instagram: (handle) => `https://instagram.com/${handle}`
+};
+
+// DOM Element Cache
+const elements = {
+  blogContainer: () => document.querySelector("#blog"),
+  heroImage: () => document.querySelector("#hero"),
+  header: () => document.querySelector("#header"),
+  subheader: () => document.querySelector("#subheader"),
+  socialLinks: () => document.querySelector("#social_links"),
+  stickyFooter: () => document.querySelector("#sticky_footer"),
+  ownerLine: () => document.querySelector("#owner_line"),
+  scrollButton: () => document.querySelector("#scroll_to_blog_button")
+};
+
+// Pure Utility Functions
+function createUnsplashUrl(query, size) {
+  return `https://source.unsplash.com/${size}/?${encodeURIComponent(query)}`;
+}
+
+function createSocialPlatformUrl(platform, handle) {
+  const urlBuilder = SOCIAL_PLATFORM_URLS[platform.toLowerCase()];
+  return urlBuilder ? urlBuilder(handle) : handle;
+}
+
+function isAtBottomOfPage() {
+  return window.innerHeight + window.pageYOffset >= 
+    document.body.offsetHeight - CONFIG.SCROLL_THRESHOLD;
+}
+
+// Data Fetching
+async function fetchCsvData(url) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    
+    const text = await response.text();
+    const parsedData = Papa.parse(text, { header: true });
+    return parsedData.data;
+  } catch (error) {
+    console.warn(`Failed to fetch CSV data: ${error.message}`);
+    return [];
+  }
+}
+
+async function fetchSiteConfig() {
+  const configData = await fetchCsvData(CONFIG.SHEET_URLS.CONFIG);
+  return configData[0] || {};
+}
+
+async function fetchBlogPosts() {
+  const blogData = await fetchCsvData(CONFIG.SHEET_URLS.CONTENT);
+  return blogData.sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+// Site Configuration
+function applySiteConfiguration(config) {
+  const { header, subheader, heroImage } = elements;
+  
+  // Set header content
+  header().innerText = config.Header || '';
+  subheader().innerText = config.Subheader || '';
+  
+  // Configure hero image
+  const heroImageUrl = config['hero-image'] || 
+    createUnsplashUrl(config.Theme, CONFIG.UNSPLASH.FEATURED_SIZE);
+  
+  const heroEl = heroImage();
+  heroEl.style.backgroundImage = `url(${heroImageUrl})`;
+  heroEl.style.backgroundAttachment = 'fixed';
+  heroEl.style.backgroundSize = 'cover';
+  
+  // Apply theme color
+  const themeColor = config.Color;
+  if (themeColor) {
+    document.body.style.setProperty('--theme-color', themeColor);
+    elements.scrollButton().style.backgroundColor = themeColor;
+    elements.stickyFooter().style.backgroundColor = themeColor;
+  }
+  
+  // Set owner attribution
+  if (config.Owner) {
+    elements.ownerLine().innerHTML = `Made with 🧠 by ${config.Owner}`;
+  }
+}
+
+function createSocialLinks(config) {
+  const socialLinksContainer = elements.socialLinks();
+  const excludedKeys = new Set(['Header', 'Subheader', 'Theme', 'Color', 'Owner', 'hero-image']);
+  
+  Object.entries(config)
+    .filter(([key, value]) => !excludedKeys.has(key) && value.trim())
+    .forEach(([platform, handle]) => {
+      const url = createSocialPlatformUrl(platform, handle);
+      const iconUrl = `https://img.icons8.com/ios-glyphs/30/ffffff/${platform.toLowerCase()}.png`;
+      
+      const linkElement = `
+        <a href="${url}" target="_blank" 
+           class="magic-hover magic-hover__square transition duration-300 ease-in-out transform hover:scale-125">
+          <img src="${iconUrl}" alt="${platform}" />
+        </a>
+      `;
+      
+      socialLinksContainer.insertAdjacentHTML('beforeend', linkElement);
+    });
+}
+
+function createBlogPostElement(post, index) {
+  const imageUrl = post.image || createUnsplashUrl(post.title, CONFIG.UNSPLASH.POST_SIZE);
+  const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()) : [];
+  
+  const blogPost = document.createElement("div");
+  blogPost.setAttribute('data-aos', 'fade-up');
+  blogPost.setAttribute('data-aos-delay', index * CONFIG.ANIMATION.DELAY_INCREMENT);
+  
+  blogPost.innerHTML = `
+    <div class="bg-white rounded-lg overflow-hidden p-6 mb-8 shadow">
+      <img class="w-full h-64 object-cover mb-4 magic-hover magic-hover__image" 
+           src="${imageUrl}" alt="${post.title}" loading="lazy">
+      <div class="text-gray-900 font-bold text-3xl mb-4 magic-twister">${post.title}</div>
+      <div class="text-gray-600">${post.content}</div>
+      <div class="mt-6">
+        <span class="text-gray-600 text-sm">By ${post.author}</span>
+        <span class="text-gray-600 text-sm ml-4">${post.date}</span>
+      </div>
+      <div class="mt-4">
+        ${tags.map(tag => 
+          `<span class="bg-gray-200 text-gray-700 rounded-full px-2 py-1 mr-2 text-sm">${tag}</span>`
+        ).join('')}
+      </div>
+    </div>
+  `;
+  
+  return blogPost;
+}
+
+function renderBlogPosts(posts) {
+  const blogContainer = elements.blogContainer();
+  const blogElements = posts.map(createBlogPostElement);
+  
+  blogElements.forEach(element => blogContainer.appendChild(element));
+}
+
+// UI State Management
+function updateFooterOpacity() {
+  const footer = elements.stickyFooter();
+  const ownerLine = elements.ownerLine();
+  
+  if (isAtBottomOfPage()) {
+    footer.classList.remove("opacity-50");
+    footer.classList.add("opacity-100");
+    ownerLine.style.display = "block";
+  } else {
+    footer.classList.remove("opacity-100");
+    footer.classList.add("opacity-50");
+    ownerLine.style.display = "none";
+  }
+}
+
+function updateParallaxEffect() {
+  const heroEl = elements.heroImage();
+  const scrollY = window.scrollY;
+  heroEl.style.backgroundPositionY = `${scrollY * CONFIG.ANIMATION.PARALLAX_SPEED}px`;
+}
+
+function updateHeaderBackgrounds() {
+  const { header, subheader } = elements;
+  
+  if (!header().innerText) header().classList.remove("show-bg");
+  if (!subheader().innerText) subheader().classList.remove("show-bg");
+}
+
+// Event Handlers
+function handleScroll() {
+  updateFooterOpacity();
+  updateParallaxEffect();
+}
+
+function scrollToBlog() {
+  elements.blogContainer().scrollIntoView({ behavior: "smooth" });
+}
+
+// Main Application Flow
+async function initializeApplication() {
+  try {
+    // Fetch and apply configuration
+    const siteConfig = await fetchSiteConfig();
+    applySiteConfiguration(siteConfig);
+    createSocialLinks(siteConfig);
+    
+    // Fetch and render blog posts
+    const blogPosts = await fetchBlogPosts();
+    renderBlogPosts(blogPosts);
+    
+    // Initialize UI state
+    updateHeaderBackgrounds();
+    updateFooterOpacity();
+    
+    // Initialize animations
+    if (typeof AOS !== 'undefined') {
+      AOS.init();
+    }
+    
+  } catch (error) {
+    console.error('Failed to initialize application:', error);
+  }
+}
+
+// Event Listeners
+window.addEventListener("scroll", handleScroll);
+window.addEventListener("DOMContentLoaded", initializeApplication);
+
+// Expose utility functions globally if needed
+window.scrollToBlog = scrollToBlog;
+</script>
+</body>
 </html>
