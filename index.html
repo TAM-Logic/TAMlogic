@@ -136,58 +136,80 @@
     }
 
     /**
-     * Data Transformation: Clean and validate image URL from CSV
-     * @param {string} rawImageValue - Raw image field from CSV
+     * Extract clean text for search purposes only (preserves original HTML)
+     * @param {string} htmlContent - Content with HTML formatting
+     * @returns {string} Plain text suitable for search terms
+     */
+    function extractSearchTermFromHtml(htmlContent) {
+      if (!htmlContent || typeof htmlContent !== 'string') {
+        return 'abstract';
+      }
+      
+      // Create temporary element to extract text content only
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = htmlContent;
+      const plainText = tempDiv.textContent || tempDiv.innerText || '';
+      
+      return plainText.trim() || 'abstract';
+    }
+
+    /**
+     * Validate image URL field (reject HTML content in image field only)
+     * @param {any} rawImageValue - Raw image field from CSV
      * @returns {string|null} Valid URL or null if invalid/empty
      */
     function normalizeImageUrl(rawImageValue) {
-      // Debug logging
-      console.log('normalizeImageUrl input:', JSON.stringify(rawImageValue), 'type:', typeof rawImageValue);
-      
-      // Step 1: Handle undefined, null, or non-string values
       if (!rawImageValue || typeof rawImageValue !== 'string') {
-        console.log('normalizeImageUrl returning null (step 1)');
         return null;
       }
       
-      // Step 2: Clean whitespace and check for content
       const trimmed = rawImageValue.trim();
       if (!trimmed) {
-        console.log('normalizeImageUrl returning null (step 2 - empty after trim)');
         return null;
       }
       
-      // Step 3: Validate URL format and reject HTML content
-      const isValidUrl = (trimmed.startsWith('http://') || trimmed.startsWith('https://'));
-      const containsHtml = trimmed.includes('<') || trimmed.includes('>');
+      // Reject HTML content in image field (this shouldn't be there)
+      if (trimmed.includes('<') || trimmed.includes('>')) {
+        console.warn('Rejected image URL containing HTML:', trimmed.substring(0, 50) + '...');
+        return null;
+      }
       
-      const result = (isValidUrl && !containsHtml) ? trimmed : null;
-      console.log('normalizeImageUrl returning:', result, 'isValidUrl:', isValidUrl, 'containsHtml:', containsHtml);
-      return result;
+      // Validate URL format
+      const isValidUrl = (trimmed.startsWith('http://') || trimmed.startsWith('https://'));
+      return isValidUrl ? trimmed : null;
     }
 
     /**
-     * Pure Function: Resolve final image URL for blog post
+     * Pure function: Resolve blog post image URL with clean search term
      * @param {string|null} csvImageUrl - Validated image URL from CSV
-     * @param {string} postTitle - Blog post title for fallback image
+     * @param {string} htmlTitle - Original HTML title (preserved for display)
      * @returns {string} Final image URL to use
      */
-    function resolveBlogPostImageUrl(csvImageUrl, postTitle) {
-      const result = csvImageUrl || unsplashImageUrl(postTitle);
-      console.log('resolveBlogPostImageUrl - csvImageUrl:', csvImageUrl, 'postTitle:', postTitle, 'final result:', result);
-      return result;
+    function resolveBlogPostImageUrl(csvImageUrl, htmlTitle) {
+      if (csvImageUrl) {
+        return csvImageUrl;
+      }
+      
+      // Extract clean search term from HTML title for Unsplash
+      const searchTerm = extractSearchTermFromHtml(htmlTitle);
+      console.log('Using Unsplash fallback with search term:', searchTerm);
+      return unsplashImageUrl(searchTerm);
     }
 
     /**
-     * Pure Function: Resolve final hero image URL
+     * Pure function: Resolve hero image URL 
      * @param {string|null} csvHeroUrl - Hero image URL from config
      * @param {string} theme - Theme for fallback image
      * @returns {string} Final hero image URL to use
      */
     function resolveHeroImageUrl(csvHeroUrl, theme) {
-      const result = csvHeroUrl || fetchUnsplashFeaturedImage(theme);
-      console.log('resolveHeroImageUrl - csvHeroUrl:', csvHeroUrl, 'theme:', theme, 'final result:', result);
-      return result;
+      if (csvHeroUrl) {
+        return csvHeroUrl;
+      }
+      
+      const searchTerm = theme || 'landscape';
+      console.log('Using Unsplash fallback for theme:', searchTerm);
+      return fetchUnsplashFeaturedImage(searchTerm);
     }
 
     // UI update functions - exactly as original
@@ -232,7 +254,7 @@
       header.innerText = config.Header;
       subheader.innerText = config.Subheader;
       
-      // Hero image resolution with clear data flow
+      // Hero image resolution - preserve original theme value
       const normalizedHeroUrl = normalizeImageUrl(config['hero-image']);
       const heroImageUrl = resolveHeroImageUrl(normalizedHeroUrl, config.Theme);
       heroImage.style.backgroundImage = `url(${heroImageUrl})`;
@@ -284,22 +306,25 @@
         }
       });
 
-      // Load and display blog posts
-      const blogData = await fetchCSV(CONFIG.SHEET_URLS.CONTENT);
-      blogData.sort((a, b) => new Date(b.date) - new Date(a.date));
+      // Load and display blog posts - PRESERVING original HTML formatting
+      const rawBlogData = await fetchCSV(CONFIG.SHEET_URLS.CONTENT);
+      rawBlogData.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-      blogData.forEach((row, index) => {
+      rawBlogData.forEach((row, index) => {
+        // Step 1: Check image field for valid URL (reject HTML in image field)
+        const normalizedImageUrl = normalizeImageUrl(row.image);
+        
+        // Step 2: Resolve image URL (extract clean text from HTML title for search only)
+        const imageUrl = resolveBlogPostImageUrl(normalizedImageUrl, row.title);
+        
+        // Step 3: Create blog post with ORIGINAL HTML formatting preserved
         const blogPost = document.createElement("div");
         blogPost.setAttribute('data-aos', 'fade-up');
         blogPost.setAttribute('data-aos-delay', index * 100);
 
-        // Blog post image resolution with clear data transformation
-        const normalizedImageUrl = normalizeImageUrl(row.image);
-        const imageUrl = resolveBlogPostImageUrl(normalizedImageUrl, row.title);
-
         blogPost.innerHTML = `
           <div class="bg-white rounded-lg overflow-hidden p-6 mb-8 shadow">
-            <img class="w-full h-64 object-cover mb-4 magic-hover magic-hover__image" src="${imageUrl}" alt="${row.title}">
+            <img class="w-full h-64 object-cover mb-4 magic-hover magic-hover__image" src="${imageUrl}" alt="Blog post image">
             <div class="text-gray-900 font-bold text-3xl mb-4 magic-twister">${row.title}</div>
             <div class="text-gray-600">${row.content}</div>
             <div class="mt-6">
@@ -307,7 +332,7 @@
               <span class="text-gray-600 text-sm">${row.date}</span>
             </div>
             <div class="mt-4">
-              ${row.tags.split(',').map(tag => `<span class="bg-gray-200 text-gray-700 rounded-full px-2 py-1 mr-2 text-sm">${tag.trim()}</span>`).join('')}
+              ${row.tags ? row.tags.split(',').map(tag => `<span class="bg-gray-200 text-gray-700 rounded-full px-2 py-1 mr-2 text-sm">${tag.trim()}</span>`).join('') : ''}
             </div>
           </div>
         `;
