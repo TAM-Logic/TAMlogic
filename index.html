@@ -141,14 +141,19 @@
      * @returns {string|null} Valid URL or null if invalid/empty
      */
     function normalizeImageUrl(rawImageValue) {
+      // Debug logging
+      console.log('normalizeImageUrl input:', JSON.stringify(rawImageValue), 'type:', typeof rawImageValue);
+      
       // Step 1: Handle undefined, null, or non-string values
       if (!rawImageValue || typeof rawImageValue !== 'string') {
+        console.log('normalizeImageUrl returning null (step 1)');
         return null;
       }
       
       // Step 2: Clean whitespace and check for content
       const trimmed = rawImageValue.trim();
       if (!trimmed) {
+        console.log('normalizeImageUrl returning null (step 2 - empty after trim)');
         return null;
       }
       
@@ -156,7 +161,9 @@
       const isValidUrl = (trimmed.startsWith('http://') || trimmed.startsWith('https://'));
       const containsHtml = trimmed.includes('<') || trimmed.includes('>');
       
-      return (isValidUrl && !containsHtml) ? trimmed : null;
+      const result = (isValidUrl && !containsHtml) ? trimmed : null;
+      console.log('normalizeImageUrl returning:', result, 'isValidUrl:', isValidUrl, 'containsHtml:', containsHtml);
+      return result;
     }
 
     /**
@@ -166,7 +173,9 @@
      * @returns {string} Final image URL to use
      */
     function resolveBlogPostImageUrl(csvImageUrl, postTitle) {
-      return csvImageUrl || unsplashImageUrl(postTitle);
+      const result = csvImageUrl || unsplashImageUrl(postTitle);
+      console.log('resolveBlogPostImageUrl - csvImageUrl:', csvImageUrl, 'postTitle:', postTitle, 'final result:', result);
+      return result;
     }
 
     /**
@@ -176,7 +185,9 @@
      * @returns {string} Final hero image URL to use
      */
     function resolveHeroImageUrl(csvHeroUrl, theme) {
-      return csvHeroUrl || fetchUnsplashFeaturedImage(theme);
+      const result = csvHeroUrl || fetchUnsplashFeaturedImage(theme);
+      console.log('resolveHeroImageUrl - csvHeroUrl:', csvHeroUrl, 'theme:', theme, 'final result:', result);
+      return result;
     }
 
     // UI update functions - exactly as original
