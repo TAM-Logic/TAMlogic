@@ -142,6 +142,19 @@ const SOCIAL_PLATFORM_URLS = {
   instagram: (handle) => `https://instagram.com/${handle}`
 };
 
+// Header normalization mapping for case-insensitive matching
+const HEADER_NORMALIZATION = {
+  'email': 'email',
+  'gmail': 'email', 
+  'twitterx': 'twitterx',
+  'twitter': 'twitterx',
+  'facebook': 'facebook',
+  'reddit': 'reddit',
+  'github': 'github',
+  'linkedin': 'linkedin',
+  'instagram': 'instagram'
+};
+
 // DOM Element Cache
 const elements = {
   blogContainer: () => document.querySelector("#blog"),
@@ -169,7 +182,27 @@ function validateStringField(value, fallback = '') {
 function isValidImageUrl(url) {
   if (!url || typeof url !== 'string') return false;
   const trimmed = url.trim();
-  return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+  // Check for HTTP URLs and reject HTML content
+  return (trimmed.startsWith('http://') || trimmed.startsWith('https://')) && 
+         !trimmed.includes('<') && !trimmed.includes('>');
+}
+
+function cleanupMisalignedData(rawPost) {
+  // Detect if image field contains HTML or non-URL content
+  if (rawPost.image && typeof rawPost.image === 'string') {
+    const imageValue = rawPost.image.trim();
+    
+    // If image field contains HTML tags, it's misaligned data
+    if (imageValue.includes('<') || imageValue.includes('>')) {
+      console.warn('Detected column misalignment - image field contains HTML:', imageValue);
+      return {
+        ...rawPost,
+        image: null // Clear the misaligned data
+      };
+    }
+  }
+  
+  return rawPost;
 }
 
 function validateBlogPost(post) {
@@ -185,7 +218,7 @@ function normalizeBlogPost(rawPost) {
     content: validateStringField(rawPost.content, CONFIG.FALLBACK_VALUES.CONTENT),
     author: validateStringField(rawPost.author, CONFIG.FALLBACK_VALUES.AUTHOR),
     date: validateStringField(rawPost.date, CONFIG.FALLBACK_VALUES.DATE),
-    image: validateStringField(rawPost.image),
+    image: isValidImageUrl(rawPost.image) ? rawPost.image.trim() : null, // Changed to null instead of empty string
     tags: validateStringField(rawPost.tags)
   };
 }
@@ -204,7 +237,10 @@ function createSocialPlatformUrl(platform, handle) {
   const cleanHandle = validateStringField(handle);
   if (!cleanHandle) return null;
   
-  const urlBuilder = SOCIAL_PLATFORM_URLS[platform.toLowerCase()];
+  // Normalize platform name for case-insensitive matching
+  const normalizedPlatform = HEADER_NORMALIZATION[platform.toLowerCase()] || platform.toLowerCase();
+  const urlBuilder = SOCIAL_PLATFORM_URLS[normalizedPlatform];
+  
   return urlBuilder ? urlBuilder(cleanHandle) : cleanHandle;
 }
 
@@ -237,6 +273,10 @@ async function fetchCsvData(url) {
       transformHeader: (header) => header.trim()
     });
     
+    // Debug CSV structure
+    console.log(`CSV Headers from ${url}:`, parsedData.meta.fields);
+    console.log(`First data row:`, parsedData.data[0]);
+    
     return parsedData.data || [];
   } catch (error) {
     console.warn(`Failed to fetch CSV data from ${url}: ${error.message}`);
@@ -251,7 +291,13 @@ async function fetchSiteConfig() {
 
 async function fetchBlogPosts() {
   const rawBlogData = await fetchCsvData(CONFIG.SHEET_URLS.CONTENT);
-  const normalizedPosts = rawBlogData.map(normalizeBlogPost);
+  
+  const cleanedData = rawBlogData.map(cleanupMisalignedData);
+  const normalizedPosts = cleanedData.map(normalizeBlogPost);
+  const validPosts = normalizedPosts.filter(validateBlogPost);
+  
+  return validPosts.sort((a, b) => new Date(b.date) - new Date(a.date));
+} rawBlogData.map(normalizeBlogPost);
   const validPosts = normalizedPosts.filter(validateBlogPost);
   
   return validPosts.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -316,7 +362,8 @@ function createSocialLinks(config) {
 }
 
 function createBlogPostElement(post, index) {
-  const imageUrl = post.image || createUnsplashUrl(post.title, CONFIG.UNSPLASH.POST_SIZE);
+  // Simple, predictable image URL logic - matches original pattern
+  const imageUrl = post.image ? post.image : unsplashImageUrl(post.title);
   const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [];
   
   const blogPost = document.createElement("div");
