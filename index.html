@@ -166,6 +166,12 @@ function validateStringField(value, fallback = '') {
   return value && typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
+function isValidImageUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+}
+
 function validateBlogPost(post) {
   return post && 
          validateStringField(post.title) && 
@@ -179,7 +185,7 @@ function normalizeBlogPost(rawPost) {
     content: validateStringField(rawPost.content, CONFIG.FALLBACK_VALUES.CONTENT),
     author: validateStringField(rawPost.author, CONFIG.FALLBACK_VALUES.AUTHOR),
     date: validateStringField(rawPost.date, CONFIG.FALLBACK_VALUES.DATE),
-    image: validateStringField(rawPost.image),
+    image: isValidImageUrl(rawPost.image) ? rawPost.image.trim() : null, // Changed to null instead of empty string
     tags: validateStringField(rawPost.tags)
   };
 }
