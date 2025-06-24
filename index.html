@@ -2,14 +2,87 @@
 
 <html lang="en">
 <head>
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-Q7E1R78WKT"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
+  <!-- Set the basics. UTF-8, scale view. -->
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-Q7E1R78WKT"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
 
-  gtag('config', 'G-Q7E1R78WKT');
-</script>
+    gtag('config', 'G-Q7E1R78WKT');
+  </script>
+
+  <!-- Name this page -->
+  <title>TAMlogic</title>
+
+  <!-- Import some libraries -->
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.3/dist/tailwind.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/aos@2.3.1/dist/aos.css" rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/magic/1.0.0/magic.min.css" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/aos@2.3.1/dist/aos.js"></script>
+
+  <!-- Give us some style -->
+  <style>
+    #blog {
+      padding-bottom: 8rem; /* Adjust this value to look perfecto */
+    }
+    #hero h1, #hero h2 {
+        margin-top: 0;
+        padding: 5px 10px;
+        border-radius: 5px;
+    }
+    #hero h1.show-bg, #hero h2.show-bg {
+        background-color: rgba(0, 0, 0, 0.4);
+        display: inline;
+    }
+    #hero {
+      height: 100vh;
+      width: 100%;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #header-container {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    #scroll_to_blog_button {
+      position: absolute;
+      top: 50px;
+      right: 50px;
+      cursor: pointer;
+      animation: bounce 3s infinite;
+    }
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+      }
+      40% {
+        transform: translateY(-30px);
+      }
+      60% {
+        transform: translateY(-30px);
+      }
+    }
+    #sticky_footer {
+      transition: background-color 300ms ease;
+    }
+    #owner_line {
+      display: none;
+      text-align: center;
+      margin-top: 1rem;
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+  </style>
 </head>
 </html>
