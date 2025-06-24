@@ -5,6 +5,7 @@
   <!-- Set the basics. UTF-8, scale view. -->
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="Personal blog and content site">
   
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-Q7E1R78WKT"></script>
@@ -83,6 +84,13 @@
     html {
       scroll-behavior: smooth;
     }
+    .loading-state {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 4rem;
+      color: #6b7280;
+    }
   </style>
 </head>
 
@@ -115,7 +123,13 @@ const CONFIG = {
     DELAY_INCREMENT: 100,
     PARALLAX_SPEED: -0.5
   },
-  SCROLL_THRESHOLD: 10
+  SCROLL_THRESHOLD: 10,
+  FALLBACK_VALUES: {
+    AUTHOR: 'Unknown Author',
+    DATE: 'No date',
+    CONTENT: 'No content available',
+    TITLE: 'Untitled Post'
+  }
 };
 
 const SOCIAL_PLATFORM_URLS = {
@@ -140,14 +154,52 @@ const elements = {
   scrollButton: () => document.querySelector("#scroll_to_blog_button")
 };
 
+// Data Validation and Sanitization
+function sanitizeHtml(str) {
+  if (!str || typeof str !== 'string') return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function validateStringField(value, fallback = '') {
+  return value && typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function validateBlogPost(post) {
+  return post && 
+         validateStringField(post.title) && 
+         validateStringField(post.content) && 
+         validateStringField(post.author);
+}
+
+function normalizeBlogPost(rawPost) {
+  return {
+    title: validateStringField(rawPost.title, CONFIG.FALLBACK_VALUES.TITLE),
+    content: validateStringField(rawPost.content, CONFIG.FALLBACK_VALUES.CONTENT),
+    author: validateStringField(rawPost.author, CONFIG.FALLBACK_VALUES.AUTHOR),
+    date: validateStringField(rawPost.date, CONFIG.FALLBACK_VALUES.DATE),
+    image: validateStringField(rawPost.image),
+    tags: validateStringField(rawPost.tags)
+  };
+}
+
+function validateConfigField(config, field, fallback = '') {
+  return validateStringField(config[field], fallback);
+}
+
 // Pure Utility Functions
 function createUnsplashUrl(query, size) {
-  return `https://source.unsplash.com/${size}/?${encodeURIComponent(query)}`;
+  const cleanQuery = validateStringField(query, 'abstract');
+  return `https://source.unsplash.com/${size}/?${encodeURIComponent(cleanQuery)}`;
 }
 
 function createSocialPlatformUrl(platform, handle) {
+  const cleanHandle = validateStringField(handle);
+  if (!cleanHandle) return null;
+  
   const urlBuilder = SOCIAL_PLATFORM_URLS[platform.toLowerCase()];
-  return urlBuilder ? urlBuilder(handle) : handle;
+  return urlBuilder ? urlBuilder(cleanHandle) : cleanHandle;
 }
 
 function isAtBottomOfPage() {
@@ -155,17 +207,33 @@ function isAtBottomOfPage() {
     document.body.offsetHeight - CONFIG.SCROLL_THRESHOLD;
 }
 
-// Data Fetching
+// UI State Management
+function showLoadingState() {
+  const blogContainer = elements.blogContainer();
+  blogContainer.innerHTML = '<div class="loading-state">Loading content...</div>';
+}
+
+function showErrorState(message = 'Failed to load content') {
+  const blogContainer = elements.blogContainer();
+  blogContainer.innerHTML = `<div class="loading-state text-red-600">${message}</div>`;
+}
+
+// Data Fetching with Resilience
 async function fetchCsvData(url) {
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     
     const text = await response.text();
-    const parsedData = Papa.parse(text, { header: true });
-    return parsedData.data;
+    const parsedData = Papa.parse(text, { 
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header) => header.trim()
+    });
+    
+    return parsedData.data || [];
   } catch (error) {
-    console.warn(`Failed to fetch CSV data: ${error.message}`);
+    console.warn(`Failed to fetch CSV data from ${url}: ${error.message}`);
     return [];
   }
 }
@@ -176,21 +244,27 @@ async function fetchSiteConfig() {
 }
 
 async function fetchBlogPosts() {
-  const blogData = await fetchCsvData(CONFIG.SHEET_URLS.CONTENT);
-  return blogData.sort((a, b) => new Date(b.date) - new Date(a.date));
+  const rawBlogData = await fetchCsvData(CONFIG.SHEET_URLS.CONTENT);
+  const normalizedPosts = rawBlogData.map(normalizeBlogPost);
+  const validPosts = normalizedPosts.filter(validateBlogPost);
+  
+  return validPosts.sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
 // Site Configuration
 function applySiteConfiguration(config) {
   const { header, subheader, heroImage } = elements;
   
-  // Set header content
-  header().innerText = config.Header || '';
-  subheader().innerText = config.Subheader || '';
+  // Set header content with validation
+  const headerText = validateConfigField(config, 'Header');
+  const subheaderText = validateConfigField(config, 'Subheader');
+  
+  header().innerText = headerText;
+  subheader().innerText = subheaderText;
   
   // Configure hero image
-  const heroImageUrl = config['hero-image'] || 
-    createUnsplashUrl(config.Theme, CONFIG.UNSPLASH.FEATURED_SIZE);
+  const heroImageUrl = validateConfigField(config, 'hero-image') || 
+    createUnsplashUrl(validateConfigField(config, 'Theme', 'landscape'), CONFIG.UNSPLASH.FEATURED_SIZE);
   
   const heroEl = heroImage();
   heroEl.style.backgroundImage = `url(${heroImageUrl})`;
@@ -198,7 +272,7 @@ function applySiteConfiguration(config) {
   heroEl.style.backgroundSize = 'cover';
   
   // Apply theme color
-  const themeColor = config.Color;
+  const themeColor = validateConfigField(config, 'Color');
   if (themeColor) {
     document.body.style.setProperty('--theme-color', themeColor);
     elements.scrollButton().style.backgroundColor = themeColor;
@@ -206,8 +280,9 @@ function applySiteConfiguration(config) {
   }
   
   // Set owner attribution
-  if (config.Owner) {
-    elements.ownerLine().innerHTML = `Made with 🧠 by ${config.Owner}`;
+  const ownerName = validateConfigField(config, 'Owner');
+  if (ownerName) {
+    elements.ownerLine().innerHTML = `Made with 🧠 by ${sanitizeHtml(ownerName)}`;
   }
 }
 
@@ -216,15 +291,17 @@ function createSocialLinks(config) {
   const excludedKeys = new Set(['Header', 'Subheader', 'Theme', 'Color', 'Owner', 'hero-image']);
   
   Object.entries(config)
-    .filter(([key, value]) => !excludedKeys.has(key) && value.trim())
+    .filter(([key, value]) => !excludedKeys.has(key) && validateStringField(value))
     .forEach(([platform, handle]) => {
       const url = createSocialPlatformUrl(platform, handle);
+      if (!url) return;
+      
       const iconUrl = `https://img.icons8.com/ios-glyphs/30/ffffff/${platform.toLowerCase()}.png`;
       
       const linkElement = `
         <a href="${url}" target="_blank" 
            class="magic-hover magic-hover__square transition duration-300 ease-in-out transform hover:scale-125">
-          <img src="${iconUrl}" alt="${platform}" />
+          <img src="${iconUrl}" alt="${sanitizeHtml(platform)}" />
         </a>
       `;
       
@@ -234,7 +311,7 @@ function createSocialLinks(config) {
 
 function createBlogPostElement(post, index) {
   const imageUrl = post.image || createUnsplashUrl(post.title, CONFIG.UNSPLASH.POST_SIZE);
-  const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()) : [];
+  const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [];
   
   const blogPost = document.createElement("div");
   blogPost.setAttribute('data-aos', 'fade-up');
@@ -243,16 +320,16 @@ function createBlogPostElement(post, index) {
   blogPost.innerHTML = `
     <div class="bg-white rounded-lg overflow-hidden p-6 mb-8 shadow">
       <img class="w-full h-64 object-cover mb-4 magic-hover magic-hover__image" 
-           src="${imageUrl}" alt="${post.title}" loading="lazy">
-      <div class="text-gray-900 font-bold text-3xl mb-4 magic-twister">${post.title}</div>
-      <div class="text-gray-600">${post.content}</div>
+           src="${imageUrl}" alt="${sanitizeHtml(post.title)}" loading="lazy">
+      <div class="text-gray-900 font-bold text-3xl mb-4 magic-twister">${sanitizeHtml(post.title)}</div>
+      <div class="text-gray-600">${sanitizeHtml(post.content)}</div>
       <div class="mt-6">
-        <span class="text-gray-600 text-sm">By ${post.author}</span>
-        <span class="text-gray-600 text-sm ml-4">${post.date}</span>
+        <span class="text-gray-600 text-sm">By ${sanitizeHtml(post.author)}</span>
+        <span class="text-gray-600 text-sm ml-4">${sanitizeHtml(post.date)}</span>
       </div>
       <div class="mt-4">
         ${tags.map(tag => 
-          `<span class="bg-gray-200 text-gray-700 rounded-full px-2 py-1 mr-2 text-sm">${tag}</span>`
+          `<span class="bg-gray-200 text-gray-700 rounded-full px-2 py-1 mr-2 text-sm">${sanitizeHtml(tag)}</span>`
         ).join('')}
       </div>
     </div>
@@ -263,8 +340,16 @@ function createBlogPostElement(post, index) {
 
 function renderBlogPosts(posts) {
   const blogContainer = elements.blogContainer();
-  const blogElements = posts.map(createBlogPostElement);
   
+  if (posts.length === 0) {
+    showErrorState('No blog posts found');
+    return;
+  }
+  
+  // Clear loading state
+  blogContainer.innerHTML = '';
+  
+  const blogElements = posts.map(createBlogPostElement);
   blogElements.forEach(element => blogContainer.appendChild(element));
 }
 
@@ -310,6 +395,9 @@ function scrollToBlog() {
 // Main Application Flow
 async function initializeApplication() {
   try {
+    // Show loading state
+    showLoadingState();
+    
     // Fetch and apply configuration
     const siteConfig = await fetchSiteConfig();
     applySiteConfiguration(siteConfig);
@@ -330,6 +418,7 @@ async function initializeApplication() {
     
   } catch (error) {
     console.error('Failed to initialize application:', error);
+    showErrorState('Failed to load application');
   }
 }
 
