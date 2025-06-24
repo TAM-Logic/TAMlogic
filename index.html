@@ -5,7 +5,6 @@
   <!-- Set the basics. UTF-8, scale view. -->
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="description" content="Personal blog and content site">
   
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-Q7E1R78WKT"></script>
@@ -84,13 +83,6 @@
     html {
       scroll-behavior: smooth;
     }
-    .loading-state {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 4rem;
-      color: #6b7280;
-    }
   </style>
 </head>
 
@@ -109,378 +101,177 @@
   </div>
  
 <script>
-// Configuration Constants
-const CONFIG = {
-  SHEET_URLS: {
-    CONFIG: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRXpTRtEhBvvYGr49Iyr7zI2XMvsWUdaK_T3wtRMyPmCIFN8pkFxXOSP586gfWrMcbYpcaJ5DaGCLRY/pub?gid=81047960&single=true&output=csv',
-    CONTENT: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRXpTRtEhBvvYGr49Iyr7zI2XMvsWUdaK_T3wtRMyPmCIFN8pkFxXOSP586gfWrMcbYpcaJ5DaGCLRY/pub?gid=0&single=true&output=csv'
-  },
-  UNSPLASH: {
-    FEATURED_SIZE: '1600x900',
-    POST_SIZE: '800x450'
-  },
-  ANIMATION: {
-    DELAY_INCREMENT: 100,
-    PARALLAX_SPEED: -0.5
-  },
-  SCROLL_THRESHOLD: 10,
-  FALLBACK_VALUES: {
-    AUTHOR: 'Unknown Author',
-    DATE: 'No date',
-    CONTENT: 'No content available',
-    TITLE: 'Untitled Post'
-  }
-};
+    // Configuration Constants
+    const CONFIG = {
+      SHEET_URLS: {
+        CONFIG: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRXpTRtEhBvvYGr49Iyr7zI2XMvsWUdaK_T3wtRMyPmCIFN8pkFxXOSP586gfWrMcbYpcaJ5DaGCLRY/pub?gid=81047960&single=true&output=csv',
+        CONTENT: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRXpTRtEhBvvYGr49Iyr7zI2XMvsWUdaK_T3wtRMyPmCIFN8pkFxXOSP586gfWrMcbYpcaJ5DaGCLRY/pub?gid=0&single=true&output=csv'
+      }
+    };
 
-const SOCIAL_PLATFORM_URLS = {
-  twitterx: (handle) => `https://twitter.com/${handle}`,
-  facebook: (handle) => `https://facebook.com/${handle}`,
-  reddit: (handle) => `https://reddit.com/user/${handle}`,
-  email: (address) => `mailto:${address}`,
-  github: (handle) => `https://github.com/${handle}`,
-  linkedin: (handle) => `https://linkedin.com/in/${handle}`,
-  instagram: (handle) => `https://instagram.com/${handle}`
-};
+    // DOM Elements
+    const blogContainer = document.querySelector("#blog");
+    const heroImage = document.querySelector("#hero");
+    const header = document.querySelector("#header");
+    const subheader = document.querySelector("#subheader");
+    const socialLinks = document.querySelector("#social_links");
+    const stickyFooter = document.querySelector("#sticky_footer");
+    const ownerLine = document.querySelector("#owner_line");
 
-// Header normalization mapping for case-insensitive matching
-const HEADER_NORMALIZATION = {
-  'email': 'email',
-  'gmail': 'email', 
-  'twitterx': 'twitterx',
-  'twitter': 'twitterx',
-  'facebook': 'facebook',
-  'reddit': 'reddit',
-  'github': 'github',
-  'linkedin': 'linkedin',
-  'instagram': 'instagram'
-};
-
-// DOM Element Cache
-const elements = {
-  blogContainer: () => document.querySelector("#blog"),
-  heroImage: () => document.querySelector("#hero"),
-  header: () => document.querySelector("#header"),
-  subheader: () => document.querySelector("#subheader"),
-  socialLinks: () => document.querySelector("#social_links"),
-  stickyFooter: () => document.querySelector("#sticky_footer"),
-  ownerLine: () => document.querySelector("#owner_line"),
-  scrollButton: () => document.querySelector("#scroll_to_blog_button")
-};
-
-// Data Validation and Sanitization
-function sanitizeHtml(str) {
-  if (!str || typeof str !== 'string') return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function validateStringField(value, fallback = '') {
-  return value && typeof value === 'string' && value.trim() ? value.trim() : fallback;
-}
-
-function isValidImageUrl(url) {
-  if (!url || typeof url !== 'string') return false;
-  const trimmed = url.trim();
-  // Check for HTTP URLs and reject HTML content
-  return (trimmed.startsWith('http://') || trimmed.startsWith('https://')) && 
-         !trimmed.includes('<') && !trimmed.includes('>');
-}
-
-function cleanupMisalignedData(rawPost) {
-  // Detect if image field contains HTML or non-URL content
-  if (rawPost.image && typeof rawPost.image === 'string') {
-    const imageValue = rawPost.image.trim();
-    
-    // If image field contains HTML tags, it's misaligned data
-    if (imageValue.includes('<') || imageValue.includes('>')) {
-      console.warn('Detected column misalignment - image field contains HTML:', imageValue);
-      return {
-        ...rawPost,
-        image: null // Clear the misaligned data
-      };
+    // Simple CSV fetch function
+    async function fetchCSV(url) {
+      const response = await fetch(url);
+      const text = await response.text();
+      const parsedCSV = Papa.parse(text, { header: true });
+      return parsedCSV.data;
     }
-  }
-  
-  return rawPost;
-}
 
-function validateBlogPost(post) {
-  return post && 
-         validateStringField(post.title) && 
-         validateStringField(post.content) && 
-         validateStringField(post.author);
-}
+    // Image URL functions - exactly as original
+    function fetchUnsplashFeaturedImage(theme) {
+      return `https://source.unsplash.com/featured/1600x900/?${encodeURIComponent(theme)}`;
+    }
 
-function normalizeBlogPost(rawPost) {
-  return {
-    title: validateStringField(rawPost.title, CONFIG.FALLBACK_VALUES.TITLE),
-    content: validateStringField(rawPost.content, CONFIG.FALLBACK_VALUES.CONTENT),
-    author: validateStringField(rawPost.author, CONFIG.FALLBACK_VALUES.AUTHOR),
-    date: validateStringField(rawPost.date, CONFIG.FALLBACK_VALUES.DATE),
-    image: isValidImageUrl(rawPost.image) ? rawPost.image.trim() : null, // Changed to null instead of empty string
-    tags: validateStringField(rawPost.tags)
-  };
-}
+    function unsplashImageUrl(title) {
+      return `https://source.unsplash.com/800x450/?${encodeURIComponent(title)}`;
+    }
 
-function validateConfigField(config, field, fallback = '') {
-  return validateStringField(config[field], fallback);
-}
+    // Simple helper to check if image field contains valid URL
+    function isValidImageUrl(imageValue) {
+      if (!imageValue || typeof imageValue !== 'string') return false;
+      const trimmed = imageValue.trim();
+      // Must start with http and not contain HTML tags
+      return (trimmed.startsWith('http://') || trimmed.startsWith('https://')) && 
+             !trimmed.includes('<') && !trimmed.includes('>');
+    }
 
-// Pure Utility Functions
-function createUnsplashUrl(query, size) {
-  const cleanQuery = validateStringField(query, 'abstract');
-  return `https://source.unsplash.com/${size}/?${encodeURIComponent(cleanQuery)}`;
-}
+    // UI update functions - exactly as original
+    function updateFooterTransparency() {
+      if (window.innerHeight + window.pageYOffset >= document.body.offsetHeight - 10) {
+        stickyFooter.classList.remove("opacity-50");
+        stickyFooter.classList.add("opacity-100");
+        ownerLine.style.display = "block";
+      } else {
+        stickyFooter.classList.remove("opacity-100");
+        stickyFooter.classList.add("opacity-50");
+        ownerLine.style.display = "none";
+      }
+    }
 
-function createSocialPlatformUrl(platform, handle) {
-  const cleanHandle = validateStringField(handle);
-  if (!cleanHandle) return null;
-  
-  // Normalize platform name for case-insensitive matching
-  const normalizedPlatform = HEADER_NORMALIZATION[platform.toLowerCase()] || platform.toLowerCase();
-  const urlBuilder = SOCIAL_PLATFORM_URLS[normalizedPlatform];
-  
-  return urlBuilder ? urlBuilder(cleanHandle) : cleanHandle;
-}
+    function updateParallax() {
+      const y = window.scrollY;
+      heroImage.style.backgroundPositionY = y * -0.5 + "px";
+    }
 
-function isAtBottomOfPage() {
-  return window.innerHeight + window.pageYOffset >= 
-    document.body.offsetHeight - CONFIG.SCROLL_THRESHOLD;
-}
+    function scrollToBlog() {
+      document.getElementById("blog").scrollIntoView({ behavior: "smooth" });
+    }
 
-// UI State Management
-function showLoadingState() {
-  const blogContainer = elements.blogContainer();
-  blogContainer.innerHTML = '<div class="loading-state">Loading content...</div>';
-}
+    function updateHeaderAndSubheaderBg() {
+      if (!header.innerText) header.classList.remove("show-bg");
+      if (!subheader.innerText) subheader.classList.remove("show-bg");
+    }
 
-function showErrorState(message = 'Failed to load content') {
-  const blogContainer = elements.blogContainer();
-  blogContainer.innerHTML = `<div class="loading-state text-red-600">${message}</div>`;
-}
-
-// Data Fetching with Resilience
-async function fetchCsvData(url) {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    
-    const text = await response.text();
-    const parsedData = Papa.parse(text, { 
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (header) => header.trim()
+    // Event listeners
+    window.addEventListener("scroll", () => {
+      updateFooterTransparency();
+      updateParallax();
     });
-    
-    // Debug CSV structure
-    console.log(`CSV Headers from ${url}:`, parsedData.meta.fields);
-    console.log(`First data row:`, parsedData.data[0]);
-    
-    return parsedData.data || [];
-  } catch (error) {
-    console.warn(`Failed to fetch CSV data from ${url}: ${error.message}`);
-    return [];
-  }
-}
 
-async function fetchSiteConfig() {
-  const configData = await fetchCsvData(CONFIG.SHEET_URLS.CONFIG);
-  return configData[0] || {};
-}
-
-async function fetchBlogPosts() {
-  const rawBlogData = await fetchCsvData(CONFIG.SHEET_URLS.CONTENT);
-  
-  const cleanedData = rawBlogData.map(cleanupMisalignedData);
-  const normalizedPosts = cleanedData.map(normalizeBlogPost);
-  const validPosts = normalizedPosts.filter(validateBlogPost);
-  
-  return validPosts.sort((a, b) => new Date(b.date) - new Date(a.date));
-} rawBlogData.map(normalizeBlogPost);
-  const validPosts = normalizedPosts.filter(validateBlogPost);
-  
-  return validPosts.sort((a, b) => new Date(b.date) - new Date(a.date));
-}
-
-// Site Configuration
-function applySiteConfiguration(config) {
-  const { header, subheader, heroImage } = elements;
-  
-  // Set header content with validation
-  const headerText = validateConfigField(config, 'Header');
-  const subheaderText = validateConfigField(config, 'Subheader');
-  
-  header().innerText = headerText;
-  subheader().innerText = subheaderText;
-  
-  // Configure hero image
-  const heroImageUrl = validateConfigField(config, 'hero-image') || 
-    createUnsplashUrl(validateConfigField(config, 'Theme', 'landscape'), CONFIG.UNSPLASH.FEATURED_SIZE);
-  
-  const heroEl = heroImage();
-  heroEl.style.backgroundImage = `url(${heroImageUrl})`;
-  heroEl.style.backgroundAttachment = 'fixed';
-  heroEl.style.backgroundSize = 'cover';
-  
-  // Apply theme color
-  const themeColor = validateConfigField(config, 'Color');
-  if (themeColor) {
-    document.body.style.setProperty('--theme-color', themeColor);
-    elements.scrollButton().style.backgroundColor = themeColor;
-    elements.stickyFooter().style.backgroundColor = themeColor;
-  }
-  
-  // Set owner attribution
-  const ownerName = validateConfigField(config, 'Owner');
-  if (ownerName) {
-    elements.ownerLine().innerHTML = `Made with 🧠 by ${sanitizeHtml(ownerName)}`;
-  }
-}
-
-function createSocialLinks(config) {
-  const socialLinksContainer = elements.socialLinks();
-  const excludedKeys = new Set(['Header', 'Subheader', 'Theme', 'Color', 'Owner', 'hero-image']);
-  
-  Object.entries(config)
-    .filter(([key, value]) => !excludedKeys.has(key) && validateStringField(value))
-    .forEach(([platform, handle]) => {
-      const url = createSocialPlatformUrl(platform, handle);
-      if (!url) return;
+    // Main content loading function
+    async function fetchAndDisplayContent() {
+      // Load configuration
+      const configData = await fetchCSV(CONFIG.SHEET_URLS.CONFIG);
+      const config = configData[0];
       
-      const iconUrl = `https://img.icons8.com/ios-glyphs/30/ffffff/${platform.toLowerCase()}.png`;
+      header.innerText = config.Header;
+      subheader.innerText = config.Subheader;
       
-      const linkElement = `
-        <a href="${url}" target="_blank" 
-           class="magic-hover magic-hover__square transition duration-300 ease-in-out transform hover:scale-125">
-          <img src="${iconUrl}" alt="${sanitizeHtml(platform)}" />
-        </a>
-      `;
-      
-      socialLinksContainer.insertAdjacentHTML('beforeend', linkElement);
-    });
-}
+      let heroImageUrl = config['hero-image'] ? config['hero-image'] : fetchUnsplashFeaturedImage(config.Theme);
+      heroImage.style.backgroundImage = `url(${heroImageUrl})`;
+      heroImage.style.backgroundAttachment = 'fixed';
+      heroImage.style.backgroundSize = 'cover';
 
-function createBlogPostElement(post, index) {
-  // Simple, predictable image URL logic - matches original pattern
-  const imageUrl = post.image ? post.image : unsplashImageUrl(post.title);
-  const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [];
-  
-  const blogPost = document.createElement("div");
-  blogPost.setAttribute('data-aos', 'fade-up');
-  blogPost.setAttribute('data-aos-delay', index * CONFIG.ANIMATION.DELAY_INCREMENT);
-  
-  blogPost.innerHTML = `
-    <div class="bg-white rounded-lg overflow-hidden p-6 mb-8 shadow">
-      <img class="w-full h-64 object-cover mb-4 magic-hover magic-hover__image" 
-           src="${imageUrl}" alt="${sanitizeHtml(post.title)}" loading="lazy">
-      <div class="text-gray-900 font-bold text-3xl mb-4 magic-twister">${sanitizeHtml(post.title)}</div>
-      <div class="text-gray-600">${sanitizeHtml(post.content)}</div>
-      <div class="mt-6">
-        <span class="text-gray-600 text-sm">By ${sanitizeHtml(post.author)}</span>
-        <span class="text-gray-600 text-sm ml-4">${sanitizeHtml(post.date)}</span>
-      </div>
-      <div class="mt-4">
-        ${tags.map(tag => 
-          `<span class="bg-gray-200 text-gray-700 rounded-full px-2 py-1 mr-2 text-sm">${sanitizeHtml(tag)}</span>`
-        ).join('')}
-      </div>
-    </div>
-  `;
-  
-  return blogPost;
-}
+      const themeColor = config.Color;
+      document.body.style.setProperty('--theme-color', themeColor);
+      document.getElementById("scroll_to_blog_button").style.backgroundColor = themeColor;
+      stickyFooter.style.backgroundColor = themeColor;
 
-function renderBlogPosts(posts) {
-  const blogContainer = elements.blogContainer();
-  
-  if (posts.length === 0) {
-    showErrorState('No blog posts found');
-    return;
-  }
-  
-  // Clear loading state
-  blogContainer.innerHTML = '';
-  
-  const blogElements = posts.map(createBlogPostElement);
-  blogElements.forEach(element => blogContainer.appendChild(element));
-}
+      ownerLine.innerHTML = `Made with 🧠 by ${config.Owner}`;
 
-// UI State Management
-function updateFooterOpacity() {
-  const footer = elements.stickyFooter();
-  const ownerLine = elements.ownerLine();
-  
-  if (isAtBottomOfPage()) {
-    footer.classList.remove("opacity-50");
-    footer.classList.add("opacity-100");
-    ownerLine.style.display = "block";
-  } else {
-    footer.classList.remove("opacity-100");
-    footer.classList.add("opacity-50");
-    ownerLine.style.display = "none";
-  }
-}
+      // Create social links
+      Object.keys(config).forEach((key) => {
+        if (key !== "Header" && key !== "Subheader" && key !== "Theme" && key !== "Color" && key !== "Owner") {
+          if (config[key] !== '') {
+            let url;
+            switch (key.toLowerCase()) {
+              case 'twitterx':
+                url = `https://twitter.com/${config[key]}`;
+                break;
+              case 'facebook':
+                url = `https://facebook.com/${config[key]}`;
+                break;
+              case 'reddit':
+                url = `https://reddit.com/user/${config[key]}`;
+                break;
+              case 'email':
+              case 'gmail':  // Handle both eMail and gmail
+                url = `mailto:${config[key]}`;
+                break;
+              case 'github':
+                url = `https://github.com/${config[key]}`;
+                break;
+              case 'linkedin':
+                url = `https://linkedin.com/in/${config[key]}`;
+                break;
+              case 'instagram':
+                url = `https://instagram.com/${config[key]}`;
+                break;
+              default:
+                url = config[key];
+                break;
+            }
+            const link = `<a href="${url}" target="_blank" class="magic-hover magic-hover__square transition duration-300 ease-in-out transform hover:scale-125"><img src="https://img.icons8.com/ios-glyphs/30/ffffff/${key.toLowerCase()}.png" alt="${key}" /></a>`;
+            socialLinks.insertAdjacentHTML('beforeend', link);
+          }
+        }
+      });
 
-function updateParallaxEffect() {
-  const heroEl = elements.heroImage();
-  const scrollY = window.scrollY;
-  heroEl.style.backgroundPositionY = `${scrollY * CONFIG.ANIMATION.PARALLAX_SPEED}px`;
-}
+      // Load and display blog posts
+      const blogData = await fetchCSV(CONFIG.SHEET_URLS.CONTENT);
+      blogData.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-function updateHeaderBackgrounds() {
-  const { header, subheader } = elements;
-  
-  if (!header().innerText) header().classList.remove("show-bg");
-  if (!subheader().innerText) subheader().classList.remove("show-bg");
-}
+      blogData.forEach((row, index) => {
+        const blogPost = document.createElement("div");
+        blogPost.setAttribute('data-aos', 'fade-up');
+        blogPost.setAttribute('data-aos-delay', index * 100);
 
-// Event Handlers
-function handleScroll() {
-  updateFooterOpacity();
-  updateParallaxEffect();
-}
+        // THE KEY FIX: Check if image field has valid URL, otherwise use unsplash
+        const imageUrl = isValidImageUrl(row.image) ? row.image : unsplashImageUrl(row.title);
 
-function scrollToBlog() {
-  elements.blogContainer().scrollIntoView({ behavior: "smooth" });
-}
+        blogPost.innerHTML = `
+          <div class="bg-white rounded-lg overflow-hidden p-6 mb-8 shadow">
+            <img class="w-full h-64 object-cover mb-4 magic-hover magic-hover__image" src="${imageUrl}" alt="${row.title}">
+            <div class="text-gray-900 font-bold text-3xl mb-4 magic-twister">${row.title}</div>
+            <div class="text-gray-600">${row.content}</div>
+            <div class="mt-6">
+              <span class="text-gray-600 text-sm">By ${row.author}</span>
+              <span class="text-gray-600 text-sm">${row.date}</span>
+            </div>
+            <div class="mt-4">
+              ${row.tags.split(',').map(tag => `<span class="bg-gray-200 text-gray-700 rounded-full px-2 py-1 mr-2 text-sm">${tag.trim()}</span>`).join('')}
+            </div>
+          </div>
+        `;
+        blogContainer.appendChild(blogPost);
+      });
 
-// Main Application Flow
-async function initializeApplication() {
-  try {
-    // Show loading state
-    showLoadingState();
-    
-    // Fetch and apply configuration
-    const siteConfig = await fetchSiteConfig();
-    applySiteConfiguration(siteConfig);
-    createSocialLinks(siteConfig);
-    
-    // Fetch and render blog posts
-    const blogPosts = await fetchBlogPosts();
-    renderBlogPosts(blogPosts);
-    
-    // Initialize UI state
-    updateHeaderBackgrounds();
-    updateFooterOpacity();
-    
-    // Initialize animations
-    if (typeof AOS !== 'undefined') {
+      updateHeaderAndSubheaderBg();
       AOS.init();
     }
-    
-  } catch (error) {
-    console.error('Failed to initialize application:', error);
-    showErrorState('Failed to load application');
-  }
-}
 
-// Event Listeners
-window.addEventListener("scroll", handleScroll);
-window.addEventListener("DOMContentLoaded", initializeApplication);
-
-// Expose utility functions globally if needed
-window.scrollToBlog = scrollToBlog;
+    // Initialize everything
+    fetchAndDisplayContent();
+    updateFooterTransparency();
 </script>
 </body>
 </html>
