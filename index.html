@@ -185,7 +185,7 @@ function normalizeBlogPost(rawPost) {
     content: validateStringField(rawPost.content, CONFIG.FALLBACK_VALUES.CONTENT),
     author: validateStringField(rawPost.author, CONFIG.FALLBACK_VALUES.AUTHOR),
     date: validateStringField(rawPost.date, CONFIG.FALLBACK_VALUES.DATE),
-    image: isValidImageUrl(rawPost.image) ? rawPost.image.trim() : null, // Changed to null instead of empty string
+    image: validateStringField(rawPost.image),
     tags: validateStringField(rawPost.tags)
   };
 }
